@@ -1,0 +1,38 @@
+name: Export pinned SWE Java smoke image
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Pull pinned amd64 image and verify identity
+        shell: bash
+        env:
+          SWE_IMAGE: swebench/sweb.eval.x86_64.google_1776_gson-2061
+          SWE_MANIFEST: sha256:4596b3add8f60fb69bb4b8759bc7d156f2839c4e8d5b1f2f3906433277375efc
+          SWE_EXPECTED_ID: sha256:ee5933b070873d85eccfae61dbccf2e5a6e47653f0d030460d418645d5e3e5e8
+        run: |
+          set -euo pipefail
+          docker pull --platform linux/amd64 "$SWE_IMAGE@$SWE_MANIFEST"
+          test "$(docker image inspect --format '{{.Id}}' "$SWE_IMAGE@$SWE_MANIFEST")" = "$SWE_EXPECTED_ID"
+          test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$SWE_IMAGE@$SWE_MANIFEST")" = 'linux/amd64'
+          docker tag "$SWE_IMAGE@$SWE_MANIFEST" "$SWE_IMAGE:latest"
+          mkdir -p bundle
+          docker image inspect "$SWE_IMAGE:latest" > bundle/image-inspect.json
+          docker save "$SWE_IMAGE:latest" | gzip -1 > bundle/swe-gson-2061.tar.gz
+          cd bundle
+          sha256sum swe-gson-2061.tar.gz > SHA256SUMS
+      - name: Upload offline image
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: swe-gson-2061-amd64
+          path: bundle/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
